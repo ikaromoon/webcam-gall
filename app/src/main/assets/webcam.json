@@ -4,7 +4,7 @@
   "riempi": true,
   "ritaglia": true,
   "ritaglio_verticale": 100,
-  "nascondi": [".sw-host", ".clappr-watermark"],
+  "nascondi": [".sw-host", ".clappr-watermark", "div[data-player] .spinner-three-bounce", "div[data-player] [data-spinner]"],
   "webcam": [
     { "nome": "Lungomare", "url": "https://www.youtube.com/watch?v=jU34ees6Tco" },
     { "nome": "Spiaggia della Purità", "url": "https://www.youtube.com/watch?v=wWNriS9CSFE" },
