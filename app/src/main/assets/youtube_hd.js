@@ -3,25 +3,61 @@
   window.__wcYoutube = true;
   var HD = __HD__;                         // true: riquadro ingrandito, forza 1080p
 
-  // Tiene il player YouTube in riproduzione, muto e sulla diretta (non indietro nel tempo).
-  // Nel riquadro ingrandito forza anche la qualita' 1080p (da solo YouTube sceglie 360p).
+  // Tiene il player YouTube in riproduzione, muto e sulla diretta (non ore indietro).
+  // Interviene solo quando serve davvero, per non provocare riavvii inutili.
+  var inizio = Date.now();
+  var fermoDa = 0;                         // da quando risulta fermo (ms), 0 = sta andando
+  var ultimoSalto = 0;                     // ultimo riposizionamento sulla diretta
+
   function controlla(){
     var p = document.getElementById('movie_player');
     if (!p || !p.getPlayerState) return;
-    try { p.mute(); } catch (e) {}
-    if (HD) { try { p.setPlaybackQualityRange('hd1080', 'hd1080'); } catch (e) {} }
-    try {
-      var stato = p.getPlayerState();     // 1 = in riproduzione, 3 = caricamento
-      if (stato !== 1 && stato !== 3) p.playVideo();
-      // diretta: se e' rimasto indietro di oltre 60 s, torna al momento attuale
-      var durata = p.getDuration(), ora = p.getCurrentTime();
-      if (durata > 0 && durata - ora > 60) p.seekTo(durata, true);
-    } catch (e) {}
+    var adesso = Date.now();
+    try { if (!p.isMuted || !p.isMuted()) p.mute(); } catch (e) {}
+
+    // 1) qualita': la imposta solo se non e' gia' 1080p
+    if (HD) {
+      try {
+        if (p.getPlaybackQuality() !== 'hd1080' &&
+            p.getAvailableQualityLevels().indexOf('hd1080') >= 0) {
+          p.setPlaybackQualityRange('hd1080', 'hd1080');
+        }
+      } catch (e) {}
+    }
+
+    // 2) riproduzione: 1 = va, 3 = sta caricando. Riparte solo se fermo da oltre 8 secondi.
+    var stato = -1;
+    try { stato = p.getPlayerState(); } catch (e) {}
+    if (stato === 1 || stato === 3) {
+      fermoDa = 0;
+    } else {
+      if (!fermoDa) fermoDa = adesso;
+      if (adesso - fermoDa > 8000) { try { p.playVideo(); } catch (e) {} fermoDa = adesso; }
+    }
+
+    // 3) diretta: se e' indietro di oltre 3 minuti torna al momento attuale.
+    //    Non nei primi 15 s e al massimo una volta ogni 2 minuti.
+    if (stato === 1 && adesso - inizio > 15000 && adesso - ultimoSalto > 120000) {
+      try {
+        var fine, pos, inDiretta = false;
+        var ps = p.getProgressState ? p.getProgressState() : null;
+        if (ps && typeof ps.seekableEnd === 'number') {
+          fine = ps.seekableEnd; pos = ps.current; inDiretta = ps.isAtLiveHead === true;
+        } else {
+          fine = p.getDuration(); pos = p.getCurrentTime();
+        }
+        if (!inDiretta && fine > 0 && fine - pos > 180) {
+          p.seekTo(fine, true);
+          ultimoSalto = adesso;
+        }
+      } catch (e) {}
+    }
   }
-  // ogni 2 s per il primo minuto, poi ogni 30 s
+
+  // ogni 3 s per il primo minuto, poi ogni 30 s
   var n = 0;
   var t = setInterval(function(){
     controlla();
-    if (++n > 30) { clearInterval(t); setInterval(controlla, 30000); }
-  }, 2000);
+    if (++n > 20) { clearInterval(t); setInterval(controlla, 30000); }
+  }, 3000);
 })();
