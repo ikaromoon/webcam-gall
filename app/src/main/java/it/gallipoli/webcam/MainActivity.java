@@ -179,6 +179,11 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true);
 
         final boolean inietta = youtubeId(url) == null;
+        if (!inietta) {
+            // YouTube: si presenta come Chrome per computer (stessa versione), non come telefono,
+            // cosi' propone le qualita' alte
+            s.setUserAgentString(agenteDesktop(s.getUserAgentString()));
+        }
         // ogni riquadro che non e' YouTube ha i propri cookie (vedi SessioneSeparata)
         final SessioneSeparata sessione = inietta ? new SessioneSeparata() : null;
         wv.setWebViewClient(new WebViewClient() {
@@ -226,7 +231,11 @@ public class MainActivity extends Activity {
         String id = youtubeId(url);
         if (id != null) {
             // pagina locale con l'iframe YouTube: l'indirizzo di base evita l'errore 153
-            wv.loadDataWithBaseURL(BASE_YT, playerHtml.replace("__ID__", id), "text/html", "utf-8", null);
+            // a tutto schermo la pagina si dichiara larga 1920 px: YouTube vede un player Full HD
+            String viewport = (i == singolo) ? "width=1920" : "width=device-width, initial-scale=1";
+            wv.loadDataWithBaseURL(BASE_YT,
+                    playerHtml.replace("__ID__", id).replace("__VIEWPORT__", viewport),
+                    "text/html", "utf-8", null);
         } else {
             wv.loadUrl(url);
         }
@@ -259,6 +268,14 @@ public class MainActivity extends Activity {
     private void programmaRicarica() {
         handler.removeCallbacks(ricaricaPeriodica);
         if (ricaricaMs > 0) handler.postDelayed(ricaricaPeriodica, ricaricaMs);
+    }
+
+    /** Identificativo di Chrome per computer con la stessa versione di Chrome del WebView. */
+    private static String agenteDesktop(String agenteAndroid) {
+        Matcher m = Pattern.compile("Chrome/([\\d.]+)").matcher(agenteAndroid == null ? "" : agenteAndroid);
+        String versione = m.find() ? m.group(1) : "90.0.4430.91";
+        return "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/"
+                + versione + " Safari/537.36";
     }
 
     private static String youtubeId(String url) {
