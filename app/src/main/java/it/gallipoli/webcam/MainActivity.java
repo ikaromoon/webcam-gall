@@ -115,7 +115,8 @@ public class MainActivity extends Activity {
             scriptPagina = leggiAsset("pagina.js")
                     .replace("__NASCONDI__", nascondi != null ? nascondi.toString() : "[]")
                     .replace("__RIEMPI__", cfg.optBoolean("riempi", true) ? "true" : "false")
-                    .replace("__RITAGLIA__", cfg.optBoolean("ritaglia", true) ? "true" : "false");
+                    .replace("__RITAGLIA__", cfg.optBoolean("ritaglia", true) ? "true" : "false")
+                    .replace("__POSY__", String.valueOf(Math.max(0, Math.min(100, cfg.optInt("ritaglio_verticale", 80)))));
             playerHtml = leggiAsset("player.html");
 
             JSONArray cams = cfg.getJSONArray("webcam");
