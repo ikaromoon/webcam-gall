@@ -234,7 +234,9 @@ public class MainActivity extends Activity {
             // a tutto schermo la pagina si dichiara larga 1920 px: YouTube vede un player Full HD
             String viewport = (i == singolo) ? "width=1920" : "width=device-width, initial-scale=1";
             wv.loadDataWithBaseURL(BASE_YT,
-                    playerHtml.replace("__ID__", id).replace("__VIEWPORT__", viewport),
+                    playerHtml.replace("__ID__", id).replace("__VIEWPORT__", viewport)
+                            // a tutto schermo chiede anche esplicitamente l'HD (YouTube puo' ignorarlo)
+                            .replace("__QUALITA__", i == singolo ? "&vq=hd1080" : ""),
                     "text/html", "utf-8", null);
         } else {
             wv.loadUrl(url);
