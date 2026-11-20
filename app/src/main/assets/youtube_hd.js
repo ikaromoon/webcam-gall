@@ -36,17 +36,18 @@
     }
 
     // 3) diretta: se e' indietro di oltre 3 minuti torna al momento attuale.
-    //    Non nei primi 15 s e al massimo una volta ogni 2 minuti.
-    if (stato === 1 && adesso - inizio > 15000 && adesso - ultimoSalto > 120000) {
+    //    Se YouTube dice esplicitamente "non sei sulla diretta" lo fa subito;
+    //    altrimenti (stima dalla durata) aspetta 15 s. Al massimo una volta ogni 2 minuti.
+    if (stato === 1 && adesso - ultimoSalto > 120000) {
       try {
-        var fine, pos, inDiretta = false;
+        var fine, pos, inDiretta = false, sicuro = false;
         var ps = p.getProgressState ? p.getProgressState() : null;
-        if (ps && typeof ps.seekableEnd === 'number') {
-          fine = ps.seekableEnd; pos = ps.current; inDiretta = ps.isAtLiveHead === true;
+        if (ps && typeof ps.seekableEnd === 'number' && typeof ps.isAtLiveHead === 'boolean') {
+          fine = ps.seekableEnd; pos = ps.current; inDiretta = ps.isAtLiveHead; sicuro = true;
         } else {
           fine = p.getDuration(); pos = p.getCurrentTime();
         }
-        if (!inDiretta && fine > 0 && fine - pos > 180) {
+        if (!inDiretta && fine > 0 && fine - pos > 180 && (sicuro || adesso - inizio > 15000)) {
           p.seekTo(fine, true);
           ultimoSalto = adesso;
         }
@@ -54,7 +55,7 @@
     }
   }
 
-  // ogni 3 s per il primo minuto, poi ogni 30 s
+  // subito, poi ogni 3 s per il primo minuto, poi ogni 30 s
   var n = 0;
   var t = setInterval(function(){
     controlla();
