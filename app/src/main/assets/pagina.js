@@ -4,6 +4,7 @@
 
   var NASCONDI = __NASCONDI__;
   var RIEMPI = __RIEMPI__;                   // true: il player riempie tutto il riquadro
+  var RITAGLIA = __RITAGLIA__;               // true: video non 16:9 tagliato per riempire, false: intero con bande
 
   // 0) stili: elementi nascosti + modalita' "riempi"
   var regole = NASCONDI.map(function(sel){ return sel + '{display:none!important}'; });
@@ -13,7 +14,7 @@
       'width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;' +
       'margin:0!important;padding:0!important;z-index:2147483000!important;background:#000!important;transform:none!important}',
     '[data-wc-player]>div,[data-wc-player] [data-container]{width:100%!important;height:100%!important}',
-    '[data-wc-player] video{width:100%!important;height:100%!important;object-fit:contain!important;background:#000!important}'
+    '[data-wc-player] video{width:100%!important;height:100%!important;object-fit:' + (RITAGLIA ? 'cover' : 'contain') + '!important;background:#000!important}'
   );
   var css = document.createElement('style');
   css.textContent = regole.join('\n');

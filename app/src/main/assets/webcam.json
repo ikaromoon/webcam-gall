@@ -2,6 +2,7 @@
   "colonne": 2,
   "ricarica_minuti": 30,
   "riempi": true,
+  "ritaglia": true,
   "nascondi": [".sw-host", ".clappr-watermark"],
   "webcam": [
     { "nome": "Lungomare", "url": "https://www.youtube.com/watch?v=jU34ees6Tco" },
