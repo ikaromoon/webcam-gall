@@ -34,6 +34,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -60,6 +64,9 @@ public class MainActivity extends Activity {
     private final List<WebView> viste = new ArrayList<>();
     private final List<TextView> etichette = new ArrayList<>();
     private final List<String> urls = new ArrayList<>();
+    // riquadri YouTube per cui l'apertura diretta del player ha dato errore: usano sempre l'iframe
+    private final Set<Integer> youtubeSoloIframe = new HashSet<>();
+    private String scriptYoutubeHd = "";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable nascondiEvidenza = new Runnable() {
@@ -118,6 +125,7 @@ public class MainActivity extends Activity {
                     .replace("__RITAGLIA__", cfg.optBoolean("ritaglia", true) ? "true" : "false")
                     .replace("__POSY__", String.valueOf(Math.max(0, Math.min(100, cfg.optInt("ritaglio_verticale", 80)))));
             playerHtml = leggiAsset("player.html");
+            scriptYoutubeHd = leggiAsset("youtube_hd.js");
 
             JSONArray cams = cfg.getJSONArray("webcam");
             int n = cams.length();
@@ -190,6 +198,10 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String u) {
                 if (inietta && u != null && u.startsWith("http")) view.evaluateJavascript(scriptPagina, null);
+                if (!inietta && u != null && u.startsWith("https://www.youtube.com/embed/")) {
+                    view.evaluateJavascript(scriptYoutubeHd, null);
+                    controllaErroreYoutube(view);
+                }
             }
 
             @Override
@@ -229,7 +241,14 @@ public class MainActivity extends Activity {
         WebView wv = viste.get(i);
         String url = urls.get(i);
         String id = youtubeId(url);
-        if (id != null) {
+        if (id != null && i == singolo && !youtubeSoloIframe.contains(i)) {
+            // ingrandita: il player YouTube diventa la pagina principale, cosi' l'app puo' forzare l'HD.
+            // Il Referer dice a YouTube da dove arriva la richiesta (serve contro l'errore 153).
+            Map<String, String> intestazioni = new HashMap<>();
+            intestazioni.put("Referer", BASE_YT);
+            wv.loadUrl("https://www.youtube.com/embed/" + id
+                    + "?autoplay=1&mute=1&playsinline=1&rel=0&controls=0&enablejsapi=1", intestazioni);
+        } else if (id != null) {
             // pagina locale con l'iframe YouTube: l'indirizzo di base evita l'errore 153
             // a tutto schermo la pagina si dichiara larga 1920 px: YouTube vede un player Full HD
             String viewport = (i == singolo) ? "width=1920" : "width=device-width, initial-scale=1";
@@ -270,6 +289,30 @@ public class MainActivity extends Activity {
     private void programmaRicarica() {
         handler.removeCallbacks(ricaricaPeriodica);
         if (ricaricaMs > 0) handler.postDelayed(ricaricaPeriodica, ricaricaMs);
+    }
+
+    /**
+     * Dopo 6 secondi controlla se il player YouTube aperto direttamente mostra un errore
+     * (es. 153): in quel caso quel riquadro torna per sempre al metodo con l'iframe.
+     */
+    private void controllaErroreYoutube(final WebView view) {
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                final int i = viste.indexOf(view);
+                if (i < 0) return;
+                view.evaluateJavascript("(function(){var e=document.querySelector('.ytp-error');"
+                        + "return !!(e && e.offsetParent !== null);})()", new android.webkit.ValueCallback<String>() {
+                    @Override
+                    public void onReceiveValue(String risultato) {
+                        if ("true".equals(risultato) && !youtubeSoloIframe.contains(i)) {
+                            youtubeSoloIframe.add(i);
+                            carica(i);
+                        }
+                    }
+                });
+            }
+        }, 6000);
     }
 
     /** Identificativo di Chrome per computer con la stessa versione di Chrome del WebView. */
