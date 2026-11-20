@@ -1,6 +1,10 @@
 package it.gallipoli.webcam;
 
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
@@ -40,6 +44,7 @@ import java.util.regex.Pattern;
  *   frecce          -> scegli il riquadro (bordo arancione)
  *   OK              -> riquadro a tutto schermo / torna alla griglia
  *   Play/Pausa      -> ricarica il riquadro scelto
+ *   Avanti veloce   -> ricarica tutti i riquadri
  *   Indietro        -> dalla vista singola torna alla griglia, dalla griglia esce
  */
 public class MainActivity extends Activity {
@@ -67,6 +72,24 @@ public class MainActivity extends Activity {
     private int colonne = 2;
     private int scelto = 0;
     private int singolo = -1;   // indice del riquadro a tutto schermo, -1 = griglia
+    private long ricaricaMs = 30 * 60 * 1000L;
+    private boolean eraFermo = false;
+
+    // ricarica tutto a intervalli regolari (i flussi live ogni tanto si bloccano)
+    private final Runnable ricaricaPeriodica = new Runnable() {
+        @Override
+        public void run() {
+            ricaricaTutto();
+        }
+    };
+
+    // TV riaccesa / ritorno dalla modalita' quadro: lo schermo si riaccende
+    private final BroadcastReceiver schermoAcceso = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            handler.postDelayed(ricaricaPeriodica, 1500);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -81,9 +104,11 @@ public class MainActivity extends Activity {
         try {
             JSONObject cfg = new JSONObject(leggiAsset("webcam.json"));
             colonne = Math.max(1, cfg.optInt("colonne", 2));
+            ricaricaMs = Math.max(0, cfg.optInt("ricarica_minuti", 30)) * 60 * 1000L;
             JSONArray nascondi = cfg.optJSONArray("nascondi");
             scriptPagina = leggiAsset("pagina.js")
-                    .replace("__NASCONDI__", nascondi != null ? nascondi.toString() : "[]");
+                    .replace("__NASCONDI__", nascondi != null ? nascondi.toString() : "[]")
+                    .replace("__RIEMPI__", cfg.optBoolean("riempi", true) ? "true" : "false");
             playerHtml = leggiAsset("player.html");
 
             JSONArray cams = cfg.getJSONArray("webcam");
@@ -119,8 +144,10 @@ public class MainActivity extends Activity {
 
         setContentView(radice);
         nascondiBarre();
-        for (int i = 0; i < viste.size(); i++) carica(i);
+        caricaScaglionato();
         mostraEvidenza(true);
+        programmaRicarica();
+        registerReceiver(schermoAcceso, new IntentFilter(Intent.ACTION_SCREEN_ON));
     }
 
     private View creaRiquadro(String nome, String url) {
@@ -146,7 +173,7 @@ public class MainActivity extends Activity {
         wv.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String u) {
-                if (inietta) view.evaluateJavascript(scriptPagina, null);
+                if (inietta && u != null && u.startsWith("http")) view.evaluateJavascript(scriptPagina, null);
             }
         });
         wv.setWebChromeClient(new WebChromeClient() {
@@ -189,6 +216,35 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void ricaricaTutto() {
+        handler.removeCallbacks(ricaricaPeriodica);
+        caricaScaglionato();
+        programmaRicarica();
+    }
+
+    /**
+     * Carica i riquadri uno alla volta, a 2 secondi di distanza: avviare quattro video nello stesso
+     * istante sovraccarica i decoder video della chiavetta (immagini bloccate o duplicate).
+     */
+    private void caricaScaglionato() {
+        for (int i = 0; i < viste.size(); i++) {
+            final int indice = i;
+            viste.get(i).stopLoading();
+            viste.get(i).loadUrl("about:blank");      // libera subito il decoder del video precedente
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    carica(indice);
+                }
+            }, 300L + 2000L * i);
+        }
+    }
+
+    private void programmaRicarica() {
+        handler.removeCallbacks(ricaricaPeriodica);
+        if (ricaricaMs > 0) handler.postDelayed(ricaricaPeriodica, ricaricaMs);
+    }
+
     private static String youtubeId(String url) {
         Matcher m = YT_ID.matcher(url);
         if (m.find() && (url.contains("youtube.com") || url.contains("youtu.be"))) return m.group(1);
@@ -205,6 +261,7 @@ public class MainActivity extends Activity {
                 || k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER
                 || k == KeyEvent.KEYCODE_NUMPAD_ENTER || k == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
                 || k == KeyEvent.KEYCODE_MEDIA_PLAY || k == KeyEvent.KEYCODE_MENU
+                || k == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD
                 || (k == KeyEvent.KEYCODE_BACK && singolo >= 0);
         if (!gestito || viste.isEmpty()) return super.dispatchKeyEvent(e);
         if (e.getAction() != KeyEvent.ACTION_DOWN || e.getRepeatCount() > 0) return true;
@@ -230,6 +287,9 @@ public class MainActivity extends Activity {
             case KeyEvent.KEYCODE_MEDIA_PLAY:
             case KeyEvent.KEYCODE_MENU:
                 carica(scelto);
+                break;
+            case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD:
+                ricaricaTutto();
                 break;
             default: // OK
                 vistaSingola(singolo >= 0 ? -1 : scelto);
@@ -300,6 +360,10 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         for (WebView wv : viste) wv.onResume();
+        if (eraFermo) {           // tornati dalla modalita' quadro, dallo standby o da un'altra app
+            eraFermo = false;
+            handler.postDelayed(ricaricaPeriodica, 500);
+        }
     }
 
     @Override
@@ -310,8 +374,19 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onStop() {
+        eraFermo = true;
+        super.onStop();
+    }
+
+    @Override
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
+        try {
+            unregisterReceiver(schermoAcceso);
+        } catch (Exception ignorato) {
+            // non registrato
+        }
         for (WebView wv : viste) wv.destroy();
         super.onDestroy();
     }
