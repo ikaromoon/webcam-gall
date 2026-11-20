@@ -14,6 +14,17 @@ android {
         versionName = "1.0"
     }
 
+    // chiave di firma fissa: ogni APK creato da GitHub ha la stessa firma,
+    // cosi' gli aggiornamenti si installano sopra la versione precedente
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
