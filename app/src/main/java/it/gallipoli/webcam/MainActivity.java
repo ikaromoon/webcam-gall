@@ -199,7 +199,8 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String u) {
                 if (inietta && u != null && u.startsWith("http")) view.evaluateJavascript(scriptPagina, null);
                 if (!inietta && u != null && u.startsWith("https://www.youtube.com/embed/")) {
-                    view.evaluateJavascript(scriptYoutubeHd, null);
+                    boolean grande = viste.indexOf(view) == singolo;
+                    view.evaluateJavascript(scriptYoutubeHd.replace("__HD__", grande ? "true" : "false"), null);
                     controllaErroreYoutube(view);
                 }
             }
@@ -241,8 +242,9 @@ public class MainActivity extends Activity {
         WebView wv = viste.get(i);
         String url = urls.get(i);
         String id = youtubeId(url);
-        if (id != null && i == singolo && !youtubeSoloIframe.contains(i)) {
-            // ingrandita: il player YouTube diventa la pagina principale, cosi' l'app puo' forzare l'HD.
+        if (id != null && !youtubeSoloIframe.contains(i)) {
+            // il player YouTube e' la pagina principale del riquadro: l'app puo' tenerlo in riproduzione
+            // sulla diretta e, quando e' ingrandito, forzare l'HD.
             // Il Referer dice a YouTube da dove arriva la richiesta (serve contro l'errore 153).
             Map<String, String> intestazioni = new HashMap<>();
             intestazioni.put("Referer", BASE_YT);
