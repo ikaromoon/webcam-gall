@@ -18,6 +18,8 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -143,6 +145,7 @@ public class MainActivity extends Activity {
         }
 
         setContentView(radice);
+        SessioneSeparata.pulisciCookieComuni();
         nascondiBarre();
         caricaScaglionato();
         mostraEvidenza(true);
@@ -170,10 +173,17 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true);
 
         final boolean inietta = youtubeId(url) == null;
+        // ogni riquadro che non e' YouTube ha i propri cookie (vedi SessioneSeparata)
+        final SessioneSeparata sessione = inietta ? new SessioneSeparata() : null;
         wv.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String u) {
                 if (inietta && u != null && u.startsWith("http")) view.evaluateJavascript(scriptPagina, null);
+            }
+
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest richiesta) {
+                return sessione != null ? sessione.scarica(richiesta) : null;
             }
         });
         wv.setWebChromeClient(new WebChromeClient() {
