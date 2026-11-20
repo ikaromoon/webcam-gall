@@ -316,7 +316,19 @@ public class MainActivity extends Activity {
     }
 
     private void vistaSingola(int indice) {
+        final int precedente = singolo;
         singolo = indice;
+        // YouTube sceglie la qualita' in base alla grandezza del player quando parte:
+        // a tutto schermo lo faccio ripartire grande (qualita' alta), tornando alla griglia piccolo
+        final int daRicaricare = indice >= 0 ? indice : precedente;
+        if (daRicaricare >= 0 && daRicaricare < urls.size() && youtubeId(urls.get(daRicaricare)) != null) {
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    carica(daRicaricare);
+                }
+            }, 300);
+        }
         for (int i = 0; i < riquadri.size(); i++) {
             riquadri.get(i).setVisibility(indice < 0 || i == indice ? View.VISIBLE : View.GONE);
         }
