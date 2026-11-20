@@ -114,7 +114,8 @@ public class MainActivity extends Activity {
             JSONArray nascondi = cfg.optJSONArray("nascondi");
             scriptPagina = leggiAsset("pagina.js")
                     .replace("__NASCONDI__", nascondi != null ? nascondi.toString() : "[]")
-                    .replace("__RIEMPI__", cfg.optBoolean("riempi", true) ? "true" : "false");
+                    .replace("__RIEMPI__", cfg.optBoolean("riempi", true) ? "true" : "false")
+                    .replace("__RITAGLIA__", cfg.optBoolean("ritaglia", true) ? "true" : "false");
             playerHtml = leggiAsset("player.html");
 
             JSONArray cams = cfg.getJSONArray("webcam");
