@@ -3,7 +3,7 @@
   "ricarica_minuti": 30,
   "riempi": true,
   "ritaglia": true,
-  "ritaglio_verticale": 80,
+  "ritaglio_verticale": 100,
   "nascondi": [".sw-host", ".clappr-watermark"],
   "webcam": [
     { "nome": "Lungomare", "url": "https://www.youtube.com/watch?v=jU34ees6Tco" },
