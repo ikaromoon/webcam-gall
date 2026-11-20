@@ -1,0 +1,10 @@
+{
+  "colonne": 2,
+  "nascondi": [".sw-host", ".clappr-watermark"],
+  "webcam": [
+    { "nome": "Lungomare", "url": "https://www.youtube.com/watch?v=jU34ees6Tco" },
+    { "nome": "Spiaggia della Purità", "url": "https://www.youtube.com/watch?v=wWNriS9CSFE" },
+    { "nome": "Porto di Gallipoli", "url": "https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/porto-di-gallipoli.html" },
+    { "nome": "Gallipoli - Spiaggia", "url": "https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/gallipoli.html" }
+  ]
+}

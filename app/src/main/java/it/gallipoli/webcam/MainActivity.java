@@ -1,0 +1,328 @@
+package it.gallipoli.webcam;
+
+import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.Gravity;
+import android.view.KeyEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.webkit.CookieManager;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * Webcam Gallipoli per Fire TV: più webcam live in una griglia, ognuna in un proprio WebView.
+ * Le webcam si configurano in assets/webcam.json.
+ *
+ * Telecomando:
+ *   frecce          -> scegli il riquadro (bordo arancione)
+ *   OK              -> riquadro a tutto schermo / torna alla griglia
+ *   Play/Pausa      -> ricarica il riquadro scelto
+ *   Indietro        -> dalla vista singola torna alla griglia, dalla griglia esce
+ */
+public class MainActivity extends Activity {
+
+    private static final String BASE_YT = "https://webcam-gallipoli.app/";
+    private static final Pattern YT_ID =
+            Pattern.compile("(?:v=|youtu\\.be/|/live/|/embed/|/shorts/)([\\w-]{11})");
+
+    private final List<FrameLayout> riquadri = new ArrayList<>();
+    private final List<LinearLayout> righe = new ArrayList<>();
+    private final List<WebView> viste = new ArrayList<>();
+    private final List<TextView> etichette = new ArrayList<>();
+    private final List<String> urls = new ArrayList<>();
+
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable nascondiEvidenza = new Runnable() {
+        @Override
+        public void run() {
+            mostraEvidenza(false);
+        }
+    };
+
+    private String scriptPagina = "";
+    private String playerHtml = "";
+    private int colonne = 2;
+    private int scelto = 0;
+    private int singolo = -1;   // indice del riquadro a tutto schermo, -1 = griglia
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
+        LinearLayout radice = new LinearLayout(this);
+        radice.setOrientation(LinearLayout.VERTICAL);
+        radice.setBackgroundColor(Color.BLACK);
+
+        try {
+            JSONObject cfg = new JSONObject(leggiAsset("webcam.json"));
+            colonne = Math.max(1, cfg.optInt("colonne", 2));
+            JSONArray nascondi = cfg.optJSONArray("nascondi");
+            scriptPagina = leggiAsset("pagina.js")
+                    .replace("__NASCONDI__", nascondi != null ? nascondi.toString() : "[]");
+            playerHtml = leggiAsset("player.html");
+
+            JSONArray cams = cfg.getJSONArray("webcam");
+            int n = cams.length();
+            colonne = Math.min(colonne, Math.max(1, n));
+            LinearLayout riga = null;
+            for (int i = 0; i < n; i++) {
+                if (i % colonne == 0) {
+                    riga = new LinearLayout(this);
+                    riga.setOrientation(LinearLayout.HORIZONTAL);
+                    radice.addView(riga, new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+                    righe.add(riga);
+                }
+                JSONObject c = cams.getJSONObject(i);
+                riga.addView(creaRiquadro(c.optString("nome", "Webcam " + (i + 1)), c.getString("url")),
+                        new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+            }
+            // riempie l'ultima riga con spazi vuoti, così i riquadri restano della stessa larghezza
+            if (riga != null) {
+                for (int k = n % colonne == 0 ? colonne : n % colonne; k < colonne; k++) {
+                    riga.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
+                }
+            }
+        } catch (Exception e) {
+            TextView errore = new TextView(this);
+            errore.setTextColor(Color.WHITE);
+            errore.setTextSize(22);
+            errore.setPadding(48, 48, 48, 48);
+            errore.setText("Errore nella configurazione (webcam.json):\n" + e.getMessage());
+            radice.addView(errore);
+        }
+
+        setContentView(radice);
+        nascondiBarre();
+        for (int i = 0; i < viste.size(); i++) carica(i);
+        mostraEvidenza(true);
+    }
+
+    private View creaRiquadro(String nome, String url) {
+        FrameLayout box = new FrameLayout(this);
+        box.setBackgroundColor(Color.BLACK);
+        box.setPadding(2, 2, 2, 2);
+
+        WebView wv = new WebView(this);
+        wv.setBackgroundColor(Color.BLACK);
+        wv.setFocusable(false);               // i tasti del telecomando li gestisce l'app
+        wv.setFocusableInTouchMode(false);
+        WebSettings s = wv.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setMediaPlaybackRequiresUserGesture(false);   // i video partono da soli
+        s.setSupportMultipleWindows(false);
+        s.setLoadWithOverviewMode(true);
+        s.setUseWideViewPort(true);
+        CookieManager.getInstance().setAcceptCookie(true);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true);
+
+        final boolean inietta = youtubeId(url) == null;
+        wv.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String u) {
+                if (inietta) view.evaluateJavascript(scriptPagina, null);
+            }
+        });
+        wv.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public Bitmap getDefaultVideoPoster() {   // niente icona grigia prima che parta il video
+                return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+            }
+        });
+
+        TextView etichetta = new TextView(this);
+        etichetta.setText(nome);
+        etichetta.setTextColor(Color.WHITE);
+        etichetta.setTextSize(16);
+        etichetta.setBackgroundColor(0xAA000000);
+        etichetta.setPadding(16, 6, 16, 6);
+        etichetta.setVisibility(View.GONE);
+
+        box.addView(wv, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        box.addView(etichetta, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.START));
+
+        riquadri.add(box);
+        viste.add(wv);
+        etichette.add(etichetta);
+        urls.add(url);
+        return box;
+    }
+
+    private void carica(int i) {
+        WebView wv = viste.get(i);
+        String url = urls.get(i);
+        String id = youtubeId(url);
+        if (id != null) {
+            // pagina locale con l'iframe YouTube: l'indirizzo di base evita l'errore 153
+            wv.loadDataWithBaseURL(BASE_YT, playerHtml.replace("__ID__", id), "text/html", "utf-8", null);
+        } else {
+            wv.loadUrl(url);
+        }
+    }
+
+    private static String youtubeId(String url) {
+        Matcher m = YT_ID.matcher(url);
+        if (m.find() && (url.contains("youtube.com") || url.contains("youtu.be"))) return m.group(1);
+        return null;
+    }
+
+    // ---------------------------------------------------------------- telecomando
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent e) {
+        int k = e.getKeyCode();
+        boolean gestito = k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT
+                || k == KeyEvent.KEYCODE_DPAD_UP || k == KeyEvent.KEYCODE_DPAD_DOWN
+                || k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER
+                || k == KeyEvent.KEYCODE_NUMPAD_ENTER || k == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                || k == KeyEvent.KEYCODE_MEDIA_PLAY || k == KeyEvent.KEYCODE_MENU
+                || (k == KeyEvent.KEYCODE_BACK && singolo >= 0);
+        if (!gestito || viste.isEmpty()) return super.dispatchKeyEvent(e);
+        if (e.getAction() != KeyEvent.ACTION_DOWN || e.getRepeatCount() > 0) return true;
+
+        int n = viste.size();
+        switch (k) {
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                if (singolo < 0 && scelto % colonne > 0) scelto--;
+                break;
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                if (singolo < 0 && scelto % colonne < colonne - 1 && scelto + 1 < n) scelto++;
+                break;
+            case KeyEvent.KEYCODE_DPAD_UP:
+                if (singolo < 0 && scelto - colonne >= 0) scelto -= colonne;
+                break;
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+                if (singolo < 0 && scelto + colonne < n) scelto += colonne;
+                break;
+            case KeyEvent.KEYCODE_BACK:
+                vistaSingola(-1);
+                break;
+            case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+            case KeyEvent.KEYCODE_MEDIA_PLAY:
+            case KeyEvent.KEYCODE_MENU:
+                carica(scelto);
+                break;
+            default: // OK
+                vistaSingola(singolo >= 0 ? -1 : scelto);
+                break;
+        }
+        mostraEvidenza(true);
+        return true;
+    }
+
+    private void vistaSingola(int indice) {
+        singolo = indice;
+        for (int i = 0; i < riquadri.size(); i++) {
+            riquadri.get(i).setVisibility(indice < 0 || i == indice ? View.VISIBLE : View.GONE);
+        }
+        for (int r = 0; r < righe.size(); r++) {
+            boolean contiene = indice < 0 || indice / colonne == r;
+            righe.get(r).setVisibility(contiene ? View.VISIBLE : View.GONE);
+        }
+        if (indice >= 0) {
+            // nella vista singola i riempitivi dell'ultima riga non devono rubare spazio
+            LinearLayout riga = righe.get(indice / colonne);
+            for (int c = 0; c < riga.getChildCount(); c++) {
+                View v = riga.getChildAt(c);
+                if (!riquadri.contains(v)) v.setVisibility(View.GONE);
+            }
+        } else {
+            for (LinearLayout riga : righe) {
+                for (int c = 0; c < riga.getChildCount(); c++) riga.getChildAt(c).setVisibility(View.VISIBLE);
+            }
+        }
+    }
+
+    /** Bordo arancione e nome sul riquadro scelto; spariscono dopo 4 secondi. */
+    private void mostraEvidenza(boolean attiva) {
+        for (int i = 0; i < riquadri.size(); i++) {
+            boolean qui = attiva && i == scelto && singolo < 0;
+            FrameLayout box = riquadri.get(i);
+            if (qui) {
+                GradientDrawable bordo = new GradientDrawable();
+                bordo.setColor(Color.TRANSPARENT);
+                bordo.setStroke(6, 0xFFFF8A00);
+                box.setForeground(bordo);
+            } else {
+                box.setForeground(null);
+            }
+            etichette.get(i).setVisibility(attiva && i == scelto ? View.VISIBLE : View.GONE);
+        }
+        handler.removeCallbacks(nascondiEvidenza);
+        if (attiva) handler.postDelayed(nascondiEvidenza, 4000);
+    }
+
+    // ---------------------------------------------------------------- ciclo di vita
+
+    private void nascondiBarre() {
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) nascondiBarre();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        for (WebView wv : viste) wv.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        for (WebView wv : viste) wv.onPause();
+        CookieManager.getInstance().flush();   // salva il consenso dato
+        super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        handler.removeCallbacksAndMessages(null);
+        for (WebView wv : viste) wv.destroy();
+        super.onDestroy();
+    }
+
+    private String leggiAsset(String nome) throws Exception {
+        try (InputStream in = getAssets().open(nome)) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int r;
+            while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
+            return new String(out.toByteArray(), StandardCharsets.UTF_8);
+        }
+    }
+}
