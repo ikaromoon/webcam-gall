@@ -67,6 +67,7 @@ public class MainActivity extends Activity {
     // riquadri YouTube per cui l'apertura diretta del player ha dato errore: usano sempre l'iframe
     private final Set<Integer> youtubeSoloIframe = new HashSet<>();
     private String scriptYoutubeHd = "";
+    private String nascondiYoutube = "[]";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable nascondiEvidenza = new Runnable() {
@@ -128,6 +129,8 @@ public class MainActivity extends Activity {
                     .replace("__POSY__", String.valueOf(Math.max(0, Math.min(100, cfg.optInt("ritaglio_verticale", 80)))));
             playerHtml = leggiAsset("player.html");
             scriptYoutubeHd = leggiAsset("youtube_hd.js");
+            JSONArray nascondiYt = cfg.optJSONArray("nascondi_youtube");
+            nascondiYoutube = nascondiYt != null ? nascondiYt.toString() : "[]";
 
             JSONArray cams = cfg.getJSONArray("webcam");
             int n = cams.length();
@@ -202,7 +205,8 @@ public class MainActivity extends Activity {
                 if (inietta && u != null && u.startsWith("http")) view.evaluateJavascript(scriptPagina, null);
                 if (!inietta && u != null && u.startsWith("https://www.youtube.com/embed/")) {
                     boolean grande = viste.indexOf(view) == singolo;
-                    view.evaluateJavascript(scriptYoutubeHd.replace("__HD__", grande ? "true" : "false"), null);
+                    view.evaluateJavascript(scriptYoutubeHd.replace("__HD__", grande ? "true" : "false")
+                            .replace("__NASCONDI_YT__", nascondiYoutube), null);
                     controllaErroreYoutube(view);
                 }
             }
