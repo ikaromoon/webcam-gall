@@ -7,7 +7,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "it.gallipoli.webcam"
+        applicationId = "it.gallipoli.webcamtv"
         minSdk = 22
         targetSdk = 34
         versionCode = 1
