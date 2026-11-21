@@ -68,6 +68,7 @@ public class MainActivity extends Activity {
     private final List<View> veli = new ArrayList<>();
     private final List<Integer> generazioni = new ArrayList<>();
     private long neroMaxMs = 60 * 1000L;
+    private float neroOpacita = 1f;
     // riquadri YouTube per cui l'apertura diretta del player ha dato errore: usano sempre l'iframe
     private final Set<Integer> youtubeSoloIframe = new HashSet<>();
     private String scriptYoutubeHd = "";
@@ -126,6 +127,7 @@ public class MainActivity extends Activity {
             ricaricaMs = Math.max(0, cfg.optInt("ricarica_minuti", 30)) * 60 * 1000L;
             ricaricaZoom = cfg.optBoolean("ricarica_zoom", false);
             neroMaxMs = Math.max(0, cfg.optInt("nero_max_secondi", 60)) * 1000L;
+            neroOpacita = Math.max(0, Math.min(100, cfg.optInt("nero_opacita", 100))) / 100f;
             JSONArray nascondi = cfg.optJSONArray("nascondi");
             scriptPagina = leggiAsset("pagina.js")
                     .replace("__NASCONDI__", nascondi != null ? nascondi.toString() : "[]")
@@ -243,6 +245,7 @@ public class MainActivity extends Activity {
             // copre la pagina (consenso, pubblicita', interfaccia) finche' il video non sta andando
             velo = new View(this);
             velo.setBackgroundColor(Color.BLACK);
+            velo.setAlpha(neroOpacita);
             box.addView(velo, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
