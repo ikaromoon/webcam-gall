@@ -2,6 +2,15 @@
   if (window.__wcYoutube) return;          // una volta sola per pagina
   window.__wcYoutube = true;
   var HD = __HD__;                         // true: riquadro ingrandito, forza 1080p
+  var NASCONDI = __NASCONDI_YT__;          // elementi dell'interfaccia YouTube da nascondere (webcam.json)
+
+  // 0) nasconde gli elementi della lista (rotellina, simbolo di pausa, titolo, pulsanti...)
+  if (NASCONDI.length) {
+    var css = document.createElement('style');
+    css.id = 'wc-nascondi-youtube';
+    css.textContent = NASCONDI.join(',') + '{display:none!important}';
+    (document.head || document.documentElement).appendChild(css);
+  }
 
   // Tiene il player YouTube in riproduzione, muto e sulla diretta (non ore indietro).
   // Interviene solo quando serve davvero, per non provocare riavvii inutili.
