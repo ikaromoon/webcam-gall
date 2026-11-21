@@ -82,6 +82,7 @@ public class MainActivity extends Activity {
     private int scelto = 0;
     private int singolo = -1;   // indice del riquadro a tutto schermo, -1 = griglia
     private long ricaricaMs = 30 * 60 * 1000L;
+    private boolean ricaricaZoom = false;
     private boolean eraFermo = false;
 
     // ricarica tutto a intervalli regolari (i flussi live ogni tanto si bloccano)
@@ -118,6 +119,7 @@ public class MainActivity extends Activity {
             JSONObject cfg = new JSONObject(leggiAsset("webcam.json"));
             colonne = Math.max(1, cfg.optInt("colonne", 2));
             ricaricaMs = Math.max(0, cfg.optInt("ricarica_minuti", 30)) * 60 * 1000L;
+            ricaricaZoom = cfg.optBoolean("ricarica_zoom", false);
             JSONArray nascondi = cfg.optJSONArray("nascondi");
             scriptPagina = leggiAsset("pagina.js")
                     .replace("__NASCONDI__", nascondi != null ? nascondi.toString() : "[]")
@@ -382,10 +384,10 @@ public class MainActivity extends Activity {
     private void vistaSingola(int indice) {
         final int precedente = singolo;
         singolo = indice;
-        // YouTube sceglie la qualita' in base alla grandezza del player quando parte:
-        // a tutto schermo lo faccio ripartire grande (qualita' alta), tornando alla griglia piccolo
+        // Con "ricarica_zoom": true il video YouTube riparte quando si ingrandisce (qualita' alta)
+        // e quando si torna alla griglia. Con false (predefinito) continua senza interruzioni.
         final int daRicaricare = indice >= 0 ? indice : precedente;
-        if (daRicaricare >= 0 && daRicaricare < urls.size() && youtubeId(urls.get(daRicaricare)) != null) {
+        if (ricaricaZoom && daRicaricare >= 0 && daRicaricare < urls.size() && youtubeId(urls.get(daRicaricare)) != null) {
             handler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
