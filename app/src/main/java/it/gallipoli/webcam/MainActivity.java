@@ -64,6 +64,10 @@ public class MainActivity extends Activity {
     private final List<WebView> viste = new ArrayList<>();
     private final List<TextView> etichette = new ArrayList<>();
     private final List<String> urls = new ArrayList<>();
+    // pannello nero sopra i riquadri non-YouTube finche' il video non parte (null per YouTube)
+    private final List<View> veli = new ArrayList<>();
+    private final List<Integer> generazioni = new ArrayList<>();
+    private long neroMaxMs = 60 * 1000L;
     // riquadri YouTube per cui l'apertura diretta del player ha dato errore: usano sempre l'iframe
     private final Set<Integer> youtubeSoloIframe = new HashSet<>();
     private String scriptYoutubeHd = "";
@@ -121,6 +125,7 @@ public class MainActivity extends Activity {
             colonne = Math.max(1, cfg.optInt("colonne", 2));
             ricaricaMs = Math.max(0, cfg.optInt("ricarica_minuti", 30)) * 60 * 1000L;
             ricaricaZoom = cfg.optBoolean("ricarica_zoom", false);
+            neroMaxMs = Math.max(0, cfg.optInt("nero_max_secondi", 60)) * 1000L;
             JSONArray nascondi = cfg.optJSONArray("nascondi");
             scriptPagina = leggiAsset("pagina.js")
                     .replace("__NASCONDI__", nascondi != null ? nascondi.toString() : "[]")
@@ -233,6 +238,14 @@ public class MainActivity extends Activity {
 
         box.addView(wv, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        View velo = null;
+        if (inietta) {
+            // copre la pagina (consenso, pubblicita', interfaccia) finche' il video non sta andando
+            velo = new View(this);
+            velo.setBackgroundColor(Color.BLACK);
+            box.addView(velo, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
         box.addView(etichetta, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
                 Gravity.TOP | Gravity.START));
@@ -241,6 +254,8 @@ public class MainActivity extends Activity {
         viste.add(wv);
         etichette.add(etichetta);
         urls.add(url);
+        veli.add(velo);
+        generazioni.add(0);
         return box;
     }
 
@@ -248,6 +263,7 @@ public class MainActivity extends Activity {
         WebView wv = viste.get(i);
         String url = urls.get(i);
         String id = youtubeId(url);
+        mostraNero(i);
         if (id != null && !youtubeSoloIframe.contains(i)) {
             // il player YouTube e' la pagina principale del riquadro: l'app puo' tenerlo in riproduzione
             // sulla diretta e, quando e' ingrandito, forzare l'HD.
@@ -284,6 +300,7 @@ public class MainActivity extends Activity {
         for (int i = 0; i < viste.size(); i++) {
             final int indice = i;
             viste.get(i).stopLoading();
+            mostraNero(i);
             viste.get(i).loadUrl("about:blank");      // libera subito il decoder del video precedente
             handler.postDelayed(new Runnable() {
                 @Override
@@ -297,6 +314,45 @@ public class MainActivity extends Activity {
     private void programmaRicarica() {
         handler.removeCallbacks(ricaricaPeriodica);
         if (ricaricaMs > 0) handler.postDelayed(ricaricaPeriodica, ricaricaMs);
+    }
+
+    /** Copre il riquadro di nero (solo non-YouTube) e controlla ogni secondo se il video e' partito. */
+    private void mostraNero(final int i) {
+        final View velo = veli.get(i);
+        if (velo == null) return;
+        velo.setVisibility(View.VISIBLE);
+        final int gen = generazioni.get(i) + 1;     // annulla i controlli dei caricamenti precedenti
+        generazioni.set(i, gen);
+        final long inizio = System.currentTimeMillis();
+        final double[] ultimo = {-1};
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (generazioni.get(i) != gen || velo.getVisibility() != View.VISIBLE) return;
+                if (neroMaxMs > 0 && System.currentTimeMillis() - inizio > neroMaxMs) {
+                    velo.setVisibility(View.GONE);   // non parte: mostra comunque la pagina
+                    return;
+                }
+                final Runnable questo = this;
+                viste.get(i).evaluateJavascript("(function(){var v=document.querySelector('div[data-player] video')"
+                        + "||document.querySelector('video');return (v&&!v.paused&&v.readyState>=2)?v.currentTime:-1;})()",
+                        new android.webkit.ValueCallback<String>() {
+                            @Override
+                            public void onReceiveValue(String valore) {
+                                if (generazioni.get(i) != gen) return;
+                                double t = -1;
+                                try { t = Double.parseDouble(valore); } catch (Exception ignorato) { }
+                                // il video sta andando se il suo tempo avanza tra due controlli
+                                if (t > 0 && ultimo[0] >= 0 && t > ultimo[0] + 0.2) {
+                                    velo.setVisibility(View.GONE);
+                                    return;
+                                }
+                                ultimo[0] = t;
+                                handler.postDelayed(questo, 1000);
+                            }
+                        });
+            }
+        }, 1000);
     }
 
     /**
