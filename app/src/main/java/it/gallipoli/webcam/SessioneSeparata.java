@@ -29,10 +29,6 @@ final class SessioneSeparata {
     private static final String[] DOMINI = {"skylinewebcams.com"};
     private static final int MAX_REDIRECT = 5;
 
-    // file statici: non dipendono dalla sessione, li scarica il WebView da solo (in parallelo, senza code)
-    private static final java.util.regex.Pattern STATICI = java.util.regex.Pattern.compile(
-            ".*\\.(png|jpe?g|gif|webp|avif|svg|ico|css|js|mjs|woff2?|ttf|otf|eot|json|map)$");
-
     private final Map<String, String> cookie = new ConcurrentHashMap<>();
 
     static boolean riguarda(Uri url) {
@@ -69,10 +65,11 @@ final class SessioneSeparata {
         if (!"GET".equalsIgnoreCase(richiesta.getMethod())) return null;
         if (!riguarda(richiesta.getUrl())) return null;
         if (!richiesta.isForMainFrame()) {
-            // passano dall'app solo la pagina e il flusso video (playlist e segmenti)
-            String host = richiesta.getUrl().getHost() == null ? "" : richiesta.getUrl().getHost().toLowerCase(Locale.ROOT);
+            // passano dall'app solo la pagina e l'elenco dei pezzi del video (.m3u8), che legano il
+            // riquadro alla sua sessione. I pezzi di video e tutto il resto li scarica il WebView da solo:
+            // cosi' le richieste bloccanti sono poche e non rallentano gli altri riquadri (YouTube).
             String percorso = richiesta.getUrl().getPath() == null ? "" : richiesta.getUrl().getPath().toLowerCase(Locale.ROOT);
-            if (host.startsWith("cdn.") || STATICI.matcher(percorso).matches()) return null;
+            if (!percorso.endsWith(".m3u8") && !percorso.endsWith(".m3u")) return null;
         }
         try {
             String url = richiesta.getUrl().toString();
