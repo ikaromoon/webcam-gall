@@ -1,0 +1,47 @@
+{
+  "colonne": 2,
+  "ricarica_minuti": 30,
+  "ricarica_zoom": false,
+  "nero_max_secondi": 60,
+  "riempi": true,
+  "ritaglia": true,
+  "ritaglio_verticale": 100,
+  "nascondi": [
+    ".sw-host",
+    ".clappr-watermark",
+    "div[data-player] .spinner-three-bounce",
+    "div[data-player] [data-spinner]"
+  ],
+  "nascondi_youtube": [
+    ".ytp-spinner",
+    ".ytp-bezel",
+    ".ytp-large-play-button",
+    ".ytp-pause-overlay",
+    ".ytp-cued-thumbnail-overlay",
+    ".player-controls-top",
+    ".fullscreen-action-menu",
+    ".quick-actions-wrapper",
+    ".watch-on-youtube-button-wrapper",
+    ".player-controls-middle",
+    ".player-controls-bottom",
+    ".player-controls-background"
+  ],
+  "webcam": [
+    {
+      "nome": "Lungomare",
+      "url": "https://www.youtube.com/watch?v=jU34ees6Tco"
+    },
+    {
+      "nome": "Spiaggia della Purità",
+      "url": "https://www.youtube.com/watch?v=wWNriS9CSFE"
+    },
+    {
+      "nome": "Porto di Gallipoli",
+      "url": "https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/porto-di-gallipoli.html"
+    },
+    {
+      "nome": "Gallipoli - Spiaggia",
+      "url": "https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/gallipoli.html"
+    }
+  ]
+}
