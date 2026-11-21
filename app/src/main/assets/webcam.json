@@ -3,7 +3,7 @@
   "ricarica_minuti": 30,
   "ricarica_zoom": false,
   "nero_max_secondi": 60,
-  "nero_opacita": 25,
+  "nero_opacita": 0,
   "riempi": true,
   "ritaglia": true,
   "ritaglio_verticale": 100,
