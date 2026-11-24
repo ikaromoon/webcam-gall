@@ -208,6 +208,13 @@ public class MainActivity extends Activity {
         final SessioneSeparata sessione = inietta ? new SessioneSeparata() : null;
         wv.setWebViewClient(new WebViewClient() {
             @Override
+            public void onPageCommitVisible(WebView view, String u) {
+                // la pagina e' gia' disegnata: lo script parte subito, senza aspettare che finisca
+                // di caricarsi tutto il resto (lo script non parte due volte, vedi pagina.js)
+                if (inietta && u != null && u.startsWith("http")) view.evaluateJavascript(scriptPagina, null);
+            }
+
+            @Override
             public void onPageFinished(WebView view, String u) {
                 if (inietta && u != null && u.startsWith("http")) view.evaluateJavascript(scriptPagina, null);
                 if (!inietta && u != null && u.startsWith("https://www.youtube.com/embed/")) {
@@ -220,7 +227,9 @@ public class MainActivity extends Activity {
 
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest richiesta) {
-                return sessione != null ? sessione.scarica(richiesta) : null;
+                if (sessione == null) return null;                       // YouTube: niente blocchi
+                if (bloccata(richiesta.getUrl().getHost())) return VUOTA_RISPOSTA();
+                return sessione.scarica(richiesta);
             }
         });
         wv.setWebChromeClient(new WebChromeClient() {
@@ -300,18 +309,50 @@ public class MainActivity extends Activity {
      * istante sovraccarica i decoder video della chiavetta (immagini bloccate o duplicate).
      */
     private void caricaScaglionato() {
-        for (int i = 0; i < viste.size(); i++) {
-            final int indice = i;
-            viste.get(i).stopLoading();
-            mostraNero(i);
-            viste.get(i).loadUrl("about:blank");      // libera subito il decoder del video precedente
+        // prima le pagine non YouTube (Skyline), che sono le piu' lente a partire, poi YouTube.
+        // 1,5 s di distanza: le Skyline impiegano comunque diversi secondi prima di avviare il video,
+        // quindi i decoder non partono mai tutti insieme.
+        List<Integer> ordine = new ArrayList<>();
+        for (int i = 0; i < viste.size(); i++) if (youtubeId(urls.get(i)) == null) ordine.add(i);
+        for (int i = 0; i < viste.size(); i++) if (youtubeId(urls.get(i)) != null) ordine.add(i);
+        for (int k = 0; k < ordine.size(); k++) {
+            final int indice = ordine.get(k);
+            viste.get(indice).stopLoading();
+            mostraNero(indice);
+            viste.get(indice).loadUrl("about:blank");      // libera subito il decoder del video precedente
             handler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
                     carica(indice);
                 }
-            }, 300L + 2000L * i);
+            }, 300L + 1500L * k);
         }
+    }
+
+    // ---------------------------------------------------------------- blocco pubblicita' (solo Skyline)
+    // Pubblicita' e statistiche rendono la pagina molto piu' pesante per la chiavetta.
+    // Non si bloccano il consenso cookie (fundingchoices) e il player video.
+    private static final String[] BLOCCATI = {
+            "doubleclick.net", "googlesyndication.com", "googleadservices.com", "google-analytics.com",
+            "googletagservices.com", "adservice.google.", "amazon-adsystem.com", "adnxs.com", "criteo.com",
+            "criteo.net", "taboola.com", "outbrain.com", "facebook.net", "connect.facebook.com",
+            "scorecardresearch.com", "quantserve.com", "pubmatic.com", "rubiconproject.com", "openx.net",
+            "casalemedia.com", "teads.tv", "smartadserver.com", "adform.net", "33across.com", "sharethrough.com",
+            "onetag-sys.com", "seedtag.com", "yieldlove", "ads.pubmatic.com", "hotjar.com", "clarity.ms",
+            "moatads.com", "adsafeprotected.com", "doubleverify.com", "2mdn.net", "media.net", "sonobi.com",
+            "smaato.net", "lijit.com", "sovrn.com", "contextweb.com", "id5-sync.com", "rlcdn.com",
+            "bidswitch.net", "everesttech.net", "adsrvr.org", "demdex.net", "krxd.net", "bluekai.com"
+    };
+
+    static boolean bloccata(String host) {
+        if (host == null) return false;
+        host = host.toLowerCase();
+        for (String b : BLOCCATI) if (host.contains(b)) return true;
+        return false;
+    }
+
+    static WebResourceResponse VUOTA_RISPOSTA() {
+        return new WebResourceResponse("text/plain", "utf-8", new java.io.ByteArrayInputStream(new byte[0]));
     }
 
     private void programmaRicarica() {
