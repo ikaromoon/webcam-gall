@@ -2,6 +2,7 @@
   "colonne": 2,
   "ricarica_minuti": 30,
   "ricarica_zoom": false,
+  "intervallo_avvio_ms": 0,
   "nero_max_secondi": 60,
   "nero_opacita": 100,
   "riempi": true,
