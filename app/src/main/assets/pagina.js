@@ -124,19 +124,28 @@
     if (++cp > 60) { clearInterval(tcp); setInterval(chiudiPopup, 15000); }
   }, 2000);
 
-  // 3) avvio del video: se il player mostra il grande tasto play, lo preme (ogni 3 s, max 1 minuto).
+  // 3) avvio del video: se il player mostra il grande tasto play, lo preme
+  //    (ogni mezzo secondo per i primi 15 s, poi ogni 3 s, in tutto massimo circa 1 minuto).
   //    Il tasto c'e' solo quando il video e' fermo, quindi non mette mai in pausa.
+  function prova(){
+    var v = document.querySelector('div[data-player] video');
+    var fermo = !v || v.paused;
+    var poster = document.querySelector('div[data-player] .player-poster, div[data-player] [data-poster]');
+    var visibile = poster && poster.getClientRects().length && getComputedStyle(poster).display !== 'none';
+    if (fermo && visibile) { poster.click(); var w = poster.querySelector('.play-wrapper'); if (w) w.click(); }
+    else if (v && v.paused) { v.play().catch(function(){}); }
+    return v && !v.paused;                       // true = il video sta andando
+  }
   function avvia(){
     var tp = 0;
-    var tplay = setInterval(function(){
-      var v = document.querySelector('div[data-player] video');
-      var fermo = !v || v.paused;
-      var poster = document.querySelector('div[data-player] .player-poster, div[data-player] [data-poster]');
-      var visibile = poster && poster.getClientRects().length && getComputedStyle(poster).display !== 'none';
-      if (fermo && visibile) { poster.click(); var w = poster.querySelector('.play-wrapper'); if (w) w.click(); }
-      else if (v && v.paused) { v.play().catch(function(){}); }
-      if ((v && !v.paused) || ++tp > 20) clearInterval(tplay);
-    }, 3000);
+    var veloce = setInterval(function(){
+      if (prova()) { clearInterval(veloce); return; }
+      if (++tp >= 30) {                          // 15 s passati: si continua con calma
+        clearInterval(veloce);
+        var tl = 0;
+        var lento = setInterval(function(){ if (prova() || ++tl > 15) clearInterval(lento); }, 3000);
+      }
+    }, 500);
   }
   avvia();
   document.addEventListener('visibilitychange', function(){ if (!document.hidden) avvia(); });
