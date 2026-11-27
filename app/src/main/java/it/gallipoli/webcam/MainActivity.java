@@ -68,7 +68,6 @@ public class MainActivity extends Activity {
     private final List<View> veli = new ArrayList<>();
     private final List<Integer> generazioni = new ArrayList<>();
     private long neroMaxMs = 60 * 1000L;
-    private long intervalloAvvioMs = 1500L;      // ritardo tra l'avvio di un riquadro e il successivo
     private float neroOpacita = 1f;
     // riquadri YouTube per cui l'apertura diretta del player ha dato errore: usano sempre l'iframe
     private final Set<Integer> youtubeSoloIframe = new HashSet<>();
@@ -128,7 +127,6 @@ public class MainActivity extends Activity {
             ricaricaMs = Math.max(0, cfg.optInt("ricarica_minuti", 30)) * 60 * 1000L;
             ricaricaZoom = cfg.optBoolean("ricarica_zoom", false);
             neroMaxMs = Math.max(0, cfg.optInt("nero_max_secondi", 60)) * 1000L;
-            intervalloAvvioMs = Math.max(0, cfg.optInt("intervallo_avvio_ms", 1500));
             neroOpacita = Math.max(0, Math.min(100, cfg.optInt("nero_opacita", 100))) / 100f;
             JSONArray nascondi = cfg.optJSONArray("nascondi");
             scriptPagina = leggiAsset("pagina.js")
@@ -312,7 +310,8 @@ public class MainActivity extends Activity {
      */
     private void caricaScaglionato() {
         // prima le pagine non YouTube (Skyline), che sono le piu' lente a partire, poi YouTube.
-        // Distanza tra un avvio e l'altro: "intervallo_avvio_ms" in webcam.json (0 = tutti insieme).
+        // 1,5 s di distanza: le Skyline impiegano comunque diversi secondi prima di avviare il video,
+        // quindi i decoder non partono mai tutti insieme.
         List<Integer> ordine = new ArrayList<>();
         for (int i = 0; i < viste.size(); i++) if (youtubeId(urls.get(i)) == null) ordine.add(i);
         for (int i = 0; i < viste.size(); i++) if (youtubeId(urls.get(i)) != null) ordine.add(i);
@@ -326,7 +325,7 @@ public class MainActivity extends Activity {
                 public void run() {
                     carica(indice);
                 }
-            }, 300L + intervalloAvvioMs * k);
+            }, 300L + 1500L * k);
         }
     }
 
